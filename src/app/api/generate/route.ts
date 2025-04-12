@@ -61,34 +61,46 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('Error generating emoji:', error)
     
-    interface ErrorResponse {
-      response?: {
-        status?: number;
+    interface ReplicateError {
+      response: {
+        status: number;
       };
-      code?: string;
     }
 
-    function isErrorWithResponse(err: unknown): err is ErrorResponse {
-      if (!err || typeof err !== 'object') return false;
-      const response = (err as ErrorResponse).response;
-      return !!response && typeof response === 'object' && typeof response.status === 'number';
+    interface NetworkError {
+      code: 'ECONNREFUSED' | 'ECONNRESET';
     }
 
-    function isErrorWithCode(err: unknown): err is ErrorResponse {
+    const isReplicateError = (err: unknown): err is ReplicateError => {
       if (!err || typeof err !== 'object') return false;
-      const code = (err as ErrorResponse).code;
-      return typeof code === 'string';
-    }
+      const obj = err as { response?: { status?: unknown } };
+      return (
+        'response' in obj &&
+        obj.response &&
+        typeof obj.response === 'object' &&
+        'status' in obj.response &&
+        typeof obj.response.status === 'number'
+      );
+    };
+
+    const isNetworkError = (err: unknown): err is NetworkError => {
+      if (!err || typeof err !== 'object') return false;
+      const obj = err as { code?: unknown };
+      return (
+        'code' in obj &&
+        typeof obj.code === 'string' &&
+        (obj.code === 'ECONNREFUSED' || obj.code === 'ECONNRESET')
+      );
+    };
     
-    if (isErrorWithResponse(error) && error.response?.status === 402) {
+    if (isReplicateError(error) && error.response.status === 402) {
       return NextResponse.json(
         { error: 'Please wait a few minutes after setting up billing before trying again.' },
         { status: 402 }
       )
     }
 
-    // Handle network errors
-    if (isErrorWithCode(error) && (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET')) {
+    if (isNetworkError(error)) {
       return NextResponse.json(
         { error: 'Failed to connect to Replicate API. Please try again.' },
         { status: 503 }
