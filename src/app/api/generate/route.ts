@@ -61,25 +61,26 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('Error generating emoji:', error)
     
-    type ErrorWithResponse = {
-      response: {
-        status: number;
+    interface ErrorResponse {
+      response?: {
+        status?: number;
       };
-    };
+      code?: string;
+    }
 
-    type ErrorWithCode = {
-      code: string;
-    };
+    function isErrorWithResponse(err: unknown): err is ErrorResponse {
+      if (!err || typeof err !== 'object') return false;
+      const response = (err as ErrorResponse).response;
+      return !!response && typeof response === 'object' && typeof response.status === 'number';
+    }
 
-    const hasResponse = (err: unknown): err is ErrorWithResponse => 
-      typeof err === 'object' && err !== null && 'response' in err && 
-      typeof (err as any).response?.status === 'number';
-
-    const hasCode = (err: unknown): err is ErrorWithCode =>
-      typeof err === 'object' && err !== null && 'code' in err &&
-      typeof (err as any).code === 'string';
+    function isErrorWithCode(err: unknown): err is ErrorResponse {
+      if (!err || typeof err !== 'object') return false;
+      const code = (err as ErrorResponse).code;
+      return typeof code === 'string';
+    }
     
-    if (hasResponse(error) && error.response.status === 402) {
+    if (isErrorWithResponse(error) && error.response?.status === 402) {
       return NextResponse.json(
         { error: 'Please wait a few minutes after setting up billing before trying again.' },
         { status: 402 }
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     // Handle network errors
-    if (hasCode(error) && (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET')) {
+    if (isErrorWithCode(error) && (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET')) {
       return NextResponse.json(
         { error: 'Failed to connect to Replicate API. Please try again.' },
         { status: 503 }
