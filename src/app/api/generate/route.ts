@@ -62,51 +62,45 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('Error generating emoji:', error)
     
-    type ReplicateErrorResponse = {
-      status: number;
+    interface ErrorWithResponse {
+      response: {
+        status: number;
+      };
     }
 
-    type ReplicateError = {
-      response: ReplicateErrorResponse;
-    }
-
-    type NetworkError = {
+    interface ErrorWithCode {
       code: string;
     }
 
-    const hasProperty = <T extends object, K extends string>(
-      obj: T,
-      prop: K
-    ): obj is T & Record<K, unknown> => {
-      return Object.prototype.hasOwnProperty.call(obj, prop);
-    };
+    function isErrorWithResponse(value: unknown): value is ErrorWithResponse {
+      return (
+        !!value &&
+        typeof value === 'object' &&
+        'response' in value &&
+        !!value.response &&
+        typeof value.response === 'object' &&
+        'status' in value.response &&
+        typeof value.response.status === 'number'
+      );
+    }
 
-    const isObject = (value: unknown): value is object => {
-      return typeof value === 'object' && value !== null;
-    };
-
-    const isReplicateError = (err: unknown): err is ReplicateError => {
-      if (!isObject(err)) return false;
-      if (!hasProperty(err, 'response')) return false;
-      if (!isObject(err.response)) return false;
-      if (!hasProperty(err.response, 'status')) return false;
-      return typeof err.response.status === 'number';
-    };
-
-    const isNetworkError = (err: unknown): err is NetworkError => {
-      if (!isObject(err)) return false;
-      if (!hasProperty(err, 'code')) return false;
-      return typeof err.code === 'string';
-    };
+    function isErrorWithCode(value: unknown): value is ErrorWithCode {
+      return (
+        !!value &&
+        typeof value === 'object' &&
+        'code' in value &&
+        typeof (value as { code: unknown }).code === 'string'
+      );
+    }
     
-    if (isReplicateError(error) && error.response.status === 402) {
+    if (isErrorWithResponse(error) && error.response.status === 402) {
       return NextResponse.json(
         { error: 'Please wait a few minutes after setting up billing before trying again.' },
         { status: 402 }
       )
     }
 
-    if (isNetworkError(error) && ['ECONNREFUSED', 'ECONNRESET'].includes(error.code)) {
+    if (isErrorWithCode(error) && ['ECONNREFUSED', 'ECONNRESET'].includes(error.code)) {
       return NextResponse.json(
         { error: 'Failed to connect to Replicate API. Please try again.' },
         { status: 503 }
