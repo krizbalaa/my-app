@@ -68,30 +68,29 @@ export async function POST(req: Request) {
     }
 
     interface NetworkError {
-      code: 'ECONNREFUSED' | 'ECONNRESET';
+      code: string;
     }
 
-    const isReplicateError = (err: unknown): err is ReplicateError => {
-      if (!err || typeof err !== 'object') return false;
-      const obj = err as { response?: { status?: unknown } };
+    function isReplicateError(err: unknown): err is ReplicateError {
       return (
-        'response' in obj &&
-        obj.response &&
-        typeof obj.response === 'object' &&
-        'status' in obj.response &&
-        typeof obj.response.status === 'number'
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response: unknown }).response === 'object' &&
+        (err as { response: unknown }).response !== null &&
+        'status' in (err as { response: { status?: unknown } }).response &&
+        typeof (err as { response: { status: unknown } }).response.status === 'number'
       );
-    };
+    }
 
-    const isNetworkError = (err: unknown): err is NetworkError => {
-      if (!err || typeof err !== 'object') return false;
-      const obj = err as { code?: unknown };
+    function isNetworkError(err: unknown): err is NetworkError {
       return (
-        'code' in obj &&
-        typeof obj.code === 'string' &&
-        (obj.code === 'ECONNREFUSED' || obj.code === 'ECONNRESET')
+        typeof err === 'object' &&
+        err !== null &&
+        'code' in err &&
+        typeof (err as { code: unknown }).code === 'string'
       );
-    };
+    }
     
     if (isReplicateError(error) && error.response.status === 402) {
       return NextResponse.json(
@@ -100,7 +99,7 @@ export async function POST(req: Request) {
       )
     }
 
-    if (isNetworkError(error)) {
+    if (isNetworkError(error) && ['ECONNREFUSED', 'ECONNRESET'].includes(error.code)) {
       return NextResponse.json(
         { error: 'Failed to connect to Replicate API. Please try again.' },
         { status: 503 }
