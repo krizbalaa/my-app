@@ -58,10 +58,28 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ imageUrl: completed.output[0] })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating emoji:', error)
     
-    if (error?.response?.status === 402) {
+    type ErrorWithResponse = {
+      response: {
+        status: number;
+      };
+    };
+
+    type ErrorWithCode = {
+      code: string;
+    };
+
+    const hasResponse = (err: unknown): err is ErrorWithResponse => 
+      typeof err === 'object' && err !== null && 'response' in err && 
+      typeof (err as any).response?.status === 'number';
+
+    const hasCode = (err: unknown): err is ErrorWithCode =>
+      typeof err === 'object' && err !== null && 'code' in err &&
+      typeof (err as any).code === 'string';
+    
+    if (hasResponse(error) && error.response.status === 402) {
       return NextResponse.json(
         { error: 'Please wait a few minutes after setting up billing before trying again.' },
         { status: 402 }
@@ -69,15 +87,16 @@ export async function POST(req: Request) {
     }
 
     // Handle network errors
-    if (error?.code === 'ECONNREFUSED' || error?.code === 'ECONNRESET') {
+    if (hasCode(error) && (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET')) {
       return NextResponse.json(
         { error: 'Failed to connect to Replicate API. Please try again.' },
         { status: 503 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate emoji'
     return NextResponse.json(
-      { error: error?.message || 'Failed to generate emoji' },
+      { error: errorMessage },
       { status: 500 }
     )
   }
