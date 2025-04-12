@@ -61,36 +61,42 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('Error generating emoji:', error)
     
-    interface ReplicateError {
-      response: {
-        status: number;
-      };
+    type ReplicateErrorResponse = {
+      status: number;
     }
 
-    interface NetworkError {
+    type ReplicateError = {
+      response: ReplicateErrorResponse;
+    }
+
+    type NetworkError = {
       code: string;
     }
 
-    function isReplicateError(err: unknown): err is ReplicateError {
-      return (
-        typeof err === 'object' &&
-        err !== null &&
-        'response' in err &&
-        typeof (err as { response: unknown }).response === 'object' &&
-        (err as { response: unknown }).response !== null &&
-        'status' in (err as { response: { status?: unknown } }).response &&
-        typeof (err as { response: { status: unknown } }).response.status === 'number'
-      );
-    }
+    const hasProperty = <T extends object, K extends string>(
+      obj: T,
+      prop: K
+    ): obj is T & Record<K, unknown> => {
+      return Object.prototype.hasOwnProperty.call(obj, prop);
+    };
 
-    function isNetworkError(err: unknown): err is NetworkError {
-      return (
-        typeof err === 'object' &&
-        err !== null &&
-        'code' in err &&
-        typeof (err as { code: unknown }).code === 'string'
-      );
-    }
+    const isObject = (value: unknown): value is object => {
+      return typeof value === 'object' && value !== null;
+    };
+
+    const isReplicateError = (err: unknown): err is ReplicateError => {
+      if (!isObject(err)) return false;
+      if (!hasProperty(err, 'response')) return false;
+      if (!isObject(err.response)) return false;
+      if (!hasProperty(err.response, 'status')) return false;
+      return typeof err.response.status === 'number';
+    };
+
+    const isNetworkError = (err: unknown): err is NetworkError => {
+      if (!isObject(err)) return false;
+      if (!hasProperty(err, 'code')) return false;
+      return typeof err.code === 'string';
+    };
     
     if (isReplicateError(error) && error.response.status === 402) {
       return NextResponse.json(
